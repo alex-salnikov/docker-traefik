@@ -1,0 +1,91 @@
+version: '3'
+
+services:
+  reverse-proxy:
+    container_name: traefik
+    image: traefik:latest         # official Traefik docker image
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      # trafik
+      - traefik.http.services.traefik.loadbalancer.server.port=8080
+      # trafik/web
+      - traefik.http.routers.traefik.rule=Host(`traefik.myserver.lan`,`traefik.myserver.com`)
+      - traefik.http.routers.traefik.entrypoints=web
+      - traefik.http.routers.traefik.service=traefik
+      # trafik/web_tls
+      #- traefik.http.routers.traefik_tls.rule=Host(`traefik.myserver.lan`,`traefik.myserver.com`)
+      - traefik.http.routers.traefik_tls.rule=Host(`traefik.myserver.com`)
+      - traefik.http.routers.traefik_tls.entrypoints=web_tls
+      - traefik.http.routers.traefik_tls.tls.certresolver=cloudflare
+      - traefik.http.routers.traefik_tls.service=traefik
+    command:
+#      - --api.dashboard=true
+      - --api.insecure=true                         # enables the web UI
+      - --providers.docker=true                     # tells Traefik to listen to docker
+      - --providers.docker.exposedbydefault=false   # only expose containers with label 'traefik.enable=true'
+#      - --providers.file.directory=/FileProvider/
+#      - --providers.file.watch=true
+      # web
+      - --entrypoints.web.address=:80               # entrypoint named 'web'
+      - --entrypoints.web.http.redirections.entrypoint.to=web_tls
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      # web_tls
+      - --entrypoints.web_tls.address=:443          # entrypoint named 'web_tls'
+      - --entrypoints.web_tls.http.tls=true
+      - --entrypoints.web_tls.http.tls.certResolver=cloudflare
+      - --entrypoints.web_tls.http.tls.domains[0].main=myserver.com
+      - --entrypoints.web_tls.http.tls.domains[0].sans=*.myserver.com
+      # certificatesresolvers
+      ## - Cloudflare
+      - --certificatesresolvers.cloudflare.acme.dnschallenge=true
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.cloudflare.acme.email=username@mailserver.com         # account
+      - --certificatesresolvers.cloudflare.acme.storage=/letsencrypt/cloudflare.json
+      # misc.
+#      - --accesslog=true
+#      - --accesslog.filePath=/logs/access.log
+#      - --log.level=DEBUG
+#      - --log.filePath=/logs/traefik.log
+#      - --traefik.docker.network=default
+    environment:
+      # CF_DNS_API_TOKEN with permissions Zone/Zone/Read and Zone/DNS/Edit, include necessary zones.
+      # https://developers.cloudflare.com/api/tokens/create/
+      - CF_API_EMAIL=username@mailserver.com
+      - CF_DNS_API_TOKEN=token
+    ports:
+      - 80:80       # HTTP port
+      - 443:443     # HTTPS port
+#      - 8080:8080   # Web UI (enabled by '--api.insecure=true', proxied with 'loadbalancer.server.port=8080')
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # So that Traefik can listen to the Docker events
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+#      - ./FileProvider/:/FileProvider/
+#      - ./logs/:/logs/
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - default
+
+networks:
+  default:
+    name: gateway
+
+
+## Create docker-network
+# docker network create \
+#   --driver=bridge \
+#   --attachable \
+#   --internal=false \
+#   gateway
+
+
+## Start
+# docker-compose up -d
+# docker-compose down
+
+
+## References
+# https://doc.traefik.io/traefik/getting-started/quick-start/
+# https://github.com/frigi83/traefik-examples/blob/master/example_dashboard/docker-compose.yml
+# https://jensknipper.de/blog/traefik-logging/
