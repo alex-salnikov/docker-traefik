@@ -1,0 +1,20 @@
+services:
+  client:
+    container_name: my_app
+    image: nginx
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.my_app.rule=Host(`my_app.myserver.com`,`my_app.myserver.net`)
+#      - traefik.http.services.my_app.loadbalancer.server.port=80     # optional, when container exposes only single port
+#    ports:
+#      - 8080:80                                                      # no need to publish port on host, Traefik will see all exposed ports via 'gateway' network
+    volumes:
+#      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./html:/usr/share/nginx/html
+
+networks:
+  default:
+    name: gateway
+
+# docker-compose up -d
+# docker-compose down
